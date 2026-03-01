@@ -184,76 +184,35 @@ let g:ctags_pattern="^\\(.\\{-}\\)\t.\\{-}\t\\(\\d*\\).*"
 " tagged line for a given source file line number.  b:length contains
 " the length of a number (line number or index) in b:lines.
 "
-" There are two versions of this function: if vim has been compiled
-" with perl support, a fast perl version is used; otherwise a native
-" version that is somewhat slower is used.
 "
-if has('perl')
-    function! GenerateTags()
-	perl << PERL_EOF
-	$max_num = "9999999";
-	$length = length($max_num);
-	$lines = "";
-	$tags = "";
-	$index = 0;
+function! GenerateTags()
+    let ctags = system(g:ctags_path.' '.g:ctags_args.' '.g:ctags_obligatory_args.' "'.expand('%').'"')
 
-	$command = VIM::Eval("g:ctags_path");
-	$command .= " " . VIM::Eval("g:ctags_args");
-	$command .= " " . VIM::Eval("g:ctags_obligatory_args");
-	$command .= " " . VIM::Eval("expand('%')");
+    let max_num = "9999999"
+    let b:length = strlen(max_num)
+    let b:lines = ''
+    let b:tags = ''
 
-	open (CTAGS, $command . "|") or die $!;
+    " strlen(spaces) must be at least b:length.
+    let spaces = '               '
+    let len = strlen(ctags)
+    let index = 0
+    let offset = 0
 
-	while (<CTAGS>)
-	{
-	    s/^(.+?)\t.*?\t(\d*);.*$/\1\t\2/;
-	    my ($tag_name, $tag_line_num) = split /\t/;
-	    $tags .= $tag_name . "\n";
-	    $lines .= sprintf("%-*d", $length, $tag_line_num);
-	    $lines .= sprintf("%-*d", $length, $index);
-	    $index += length($tag_name) + 1;
-	}
+    while offset < len
+	let one_tag = matchstr(ctags, "[^\n]*", offset)
+	let tag_name = substitute(one_tag, g:ctags_pattern, '\1', '')
+	let tag_line_num = substitute(one_tag, g:ctags_pattern, '\2', '')
+	let b:lines = b:lines . strpart(tag_line_num.spaces, 0, b:length)
+	let b:lines = b:lines . strpart(index.spaces, 0, b:length)
+	let b:tags = b:tags . tag_name . "\n"
+	let index = index + strlen(tag_name) + 1
+	let offset = offset + strlen(one_tag) + 1
+    endwhile
 
-	close (CTAGS);
-
-	$lines .= $max_num;
-	$lines .= $max_num;
-
-	VIM::DoCommand("let b:tags = '$tags'");
-	VIM::DoCommand("let b:length = $length");
-	VIM::DoCommand("let b:lines = '$lines'");
-PERL_EOF
-    endfunction
-else
-    function! GenerateTags()
-	let ctags = system(g:ctags_path.' '.g:ctags_args.' '.g:ctags_obligatory_args.' "'.expand('%').'"')
-
-	let max_num = "9999999"
-	let b:length = strlen(max_num)
-	let b:lines = ''
-	let b:tags = ''
-
-	" strlen(spaces) must be at least b:length.
-	let spaces = '               '
-	let len = strlen(ctags)
-	let index = 0
-	let offset = 0
-
-	while offset < len
-	    let one_tag = matchstr(ctags, "[^\n]*", offset)
-	    let tag_name = substitute(one_tag, g:ctags_pattern, '\1', '')
-	    let tag_line_num = substitute(one_tag, g:ctags_pattern, '\2', '')
-	    let b:lines = b:lines . strpart(tag_line_num.spaces, 0, b:length)
-	    let b:lines = b:lines . strpart(index.spaces, 0, b:length)
-	    let b:tags = b:tags . tag_name . "\n"
-	    let index = index + strlen(tag_name) + 1
-	    let offset = offset + strlen(one_tag) + 1
-	endwhile
-
-	let b:lines = b:lines . max_num
-	let b:lines = b:lines . max_num
-    endfunction
-endif
+    let b:lines = b:lines . max_num
+    let b:lines = b:lines . max_num
+endfunction
 
 " This function returns the tag name for given index.
 function! GetLine(i)
@@ -295,6 +254,7 @@ function! GetTagName(curline)
     endwhile
 
     let index = GetIndex(left)
+    let ret = ""
 
     if index < strlen(b:tags)
 	let ret = matchstr(b:tags, "[^\n]*", index)
