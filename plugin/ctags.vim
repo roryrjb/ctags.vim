@@ -14,7 +14,7 @@
 " Upon sourcing an autocommand is created with event type CursorHold.  It
 " updates the title string or a buffer-local variable using the function
 " GetTagName.  Another autocommand of type BufEnter is created to generate
-" tags for *.c, *.cpp, *.h, *.py and *.vim files.
+" tags for all file types when a tag file is found.
 " 
 " Function GenerateTags builds an array of tag names.
 " 
@@ -36,8 +36,7 @@
 "        (or whatever other additional arguments you want to pass to ctags)
 "    let g:ctags_title=1	" To show tag name in title bar.
 "    let g:ctags_statusline=1	" To show tag name in status line.
-"    let generate_tags=1	" To start automatically when a supported
-"				" file is opened.
+"    (The plugin activates automatically when a tag file is found.)
 "
 " The configuration variables (g:ctags_*) may also be changed after the
 " plugin is loaded.  Setting g:ctags_title or g:ctags_statusline to 0
@@ -47,8 +46,6 @@
 " filetype plugin.  To restore the default appearance of either of those
 " options, simply execute ":set titlestring=" or ":set statusline=" as
 " desired.
-" 
-" :CTAGS command starts the script.
 
 " Exit quickly when already loaded.
 "
@@ -92,10 +89,6 @@ if !exists("ctags_args")
     let g:ctags_args='--c-types=cfgsu --vim-types=f --if0=yes'
 endif
 
-if !exists("generate_tags")
-    let generate_tags = 0
-endif
-
 " By default, the ctags list is regenerated whenever the buffer is
 " written.  Allow the user to disable this behavior by setting
 " g:ctags_regenerate = 0 if, for example, this becomes a performance
@@ -122,20 +115,22 @@ if !exists("g:ctags_statusline")
     let g:ctags_statusline = 0
 endif
 
-command! CTAGS let generate_tags=1|call GenerateTags()
+function! s:ShouldActivate()
+    return !empty(tagfiles())
+endfunction
 
-autocmd BufEnter *.c,*.cpp,*.h,*.py,*.vim
-\   if g:ctags_statusline != 0
-\ |     let s:save_laststatus = &laststatus
-\ |     set laststatus=2
-\ | endif
-\ | if generate_tags != 0
-\      && !exists('b:lines')
-\      && filereadable(expand("<afile>"))
-\ | call GenerateTags()
+autocmd BufEnter *
+\   if s:ShouldActivate()
+\ |     if g:ctags_statusline != 0
+\ |         let s:save_laststatus = &laststatus
+\ |         set laststatus=2
+\ |     endif
+\ |     if !exists('b:lines') && filereadable(expand("<afile>"))
+\ |         call GenerateTags()
+\ |     endif
 \ | endif
 
-autocmd BufLeave *.c,*.cpp,*.h,*.py,*.vim
+autocmd BufLeave *
 \   if exists("s:save_laststatus")
 \ |     let &laststatus = s:save_laststatus
 \ |     unlet s:save_laststatus
@@ -143,15 +138,15 @@ autocmd BufLeave *.c,*.cpp,*.h,*.py,*.vim
 
 " Update the tags list whenever the buffer is written.
 "
-autocmd BufWritePost *.c,*.cpp,*.h,*.py,*.vim
-\   if (generate_tags != 0) && (g:ctags_regenerate != 0)
+autocmd BufWritePost *
+\   if s:ShouldActivate() && (g:ctags_regenerate != 0)
 \ |     call GenerateTags()
 \ | endif
 
 set updatetime=500
 
 autocmd CursorHold *
-\   if generate_tags != 0
+\   if s:ShouldActivate()
 \ |     call s:SetTagDisplay()
 \ | endif
 
